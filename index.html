@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>券商月度資料看板</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root{
+    --bg:#F5F6F8; --surface:#FFFFFF; --ink:#1B2130; --muted:#6B7280; --faint:#9AA0AB;
+    --border:#E5E7EC; --border-strong:#D4D7DE;
+    --navy:#243B6B; --navy-soft:#EDF0F7; --gold:#B5893B;
+    --up:#D23B3B; --down:#1E9E5A;
+    --radius:12px; --radius-sm:8px;
+    --num:'Inter', system-ui, sans-serif;
+    --ui:'Inter', system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--ui);
+    -webkit-font-smoothing:antialiased; line-height:1.5;}
+  .num{font-family:var(--num); font-variant-numeric:tabular-nums;}
+  .wrap{max-width:1180px; margin:0 auto; padding:24px 20px 64px;}
+
+  header.top{display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap; margin-bottom:22px;}
+  .brand{display:flex; flex-direction:column; gap:4px;}
+  .brand .eyebrow{font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--gold); font-weight:600;}
+  .brand h1{margin:0; font-size:25px; font-weight:700; letter-spacing:-.01em;}
+  .brand .sub{font-size:13px; color:var(--muted);}
+
+  .toolbar{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+  .seg{display:inline-flex; background:var(--surface); border:1px solid var(--border); border-radius:999px; padding:3px;}
+  .seg button{border:0; background:transparent; font-family:var(--ui); font-size:13.5px; font-weight:600;
+    color:var(--muted); padding:7px 18px; border-radius:999px; cursor:pointer; transition:.15s;}
+  .seg button.on{background:var(--navy); color:#fff;}
+  .seg button:not(.on):hover{color:var(--ink);}
+
+  .btn{border:1px solid var(--border-strong); background:var(--surface); color:var(--ink);
+    font-family:var(--ui); font-size:13px; font-weight:600; padding:8px 14px; border-radius:var(--radius-sm);
+    cursor:pointer; display:inline-flex; align-items:center; gap:6px; transition:.15s;}
+  .btn:hover{border-color:var(--navy); color:var(--navy);}
+  .btn.primary{background:var(--navy); color:#fff; border-color:var(--navy);}
+  .btn.primary:hover{background:#1b2f57; color:#fff;}
+
+  .kpis{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:22px;}
+  .kpi{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px;}
+  .kpi .label{font-size:12px; color:var(--muted); margin-bottom:7px; display:flex; align-items:center; gap:6px;}
+  .kpi .value{font-size:26px; font-weight:700; letter-spacing:-.02em;}
+  .kpi .value small{font-size:14px; font-weight:600; color:var(--muted); margin-left:4px;}
+  .kpi .delta{font-size:12.5px; font-weight:600; margin-top:5px;}
+  .delta.up{color:var(--up);} .delta.down{color:var(--down);} .delta.flat{color:var(--faint);}
+
+  .panel{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:0; overflow:hidden;}
+  .panel-head{display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
+    padding:16px 20px; border-bottom:1px solid var(--border);}
+  .tabs{display:inline-flex; gap:2px;}
+  .tabs button{border:0; background:transparent; font-family:var(--ui); font-size:14px; font-weight:600;
+    color:var(--muted); padding:9px 4px; margin-right:18px; cursor:pointer; border-bottom:2px solid transparent;}
+  .tabs button.on{color:var(--navy); border-bottom-color:var(--navy);}
+  .tabs button:not(.on):hover{color:var(--ink);}
+  .panel-tools{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .panel-tools label{font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:6px;}
+  select, .panel-tools input{font-family:var(--num); font-size:13px; padding:6px 10px; border:1px solid var(--border-strong);
+    border-radius:var(--radius-sm); background:var(--surface); color:var(--ink);}
+  .switch{display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--muted); cursor:pointer;}
+  .switch input{accent-color:var(--navy); width:15px; height:15px;}
+
+  .panel-body{padding:20px;}
+  .chart-box{position:relative; width:100%; height:440px;}
+
+  .filterbar{display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:14px 20px; border-bottom:1px solid var(--border); background:#FAFBFC;}
+  .filterbar .ftitle{font-size:12px; color:var(--muted); font-weight:600; margin-right:4px;}
+  .chip{display:inline-flex; align-items:center; gap:7px; font-size:12.5px; font-weight:600; color:var(--ink);
+    border:1px solid var(--border-strong); background:var(--surface); border-radius:999px; padding:5px 12px 5px 9px; cursor:pointer; transition:.12s;}
+  .chip .dot{width:10px; height:10px; border-radius:50%; flex:none;}
+  .chip.off{color:var(--faint); background:#F2F3F5;}
+  .chip.off .dot{opacity:.3;}
+  .chip:hover{border-color:var(--navy);}
+  .chip-all{color:var(--navy); border-style:dashed;}
+
+  table.data{width:100%; border-collapse:collapse; font-size:13px;}
+  table.data th, table.data td{padding:9px 10px; text-align:right; border-bottom:1px solid var(--border); white-space:nowrap;}
+  table.data th{font-size:11.5px; color:var(--muted); font-weight:600; position:sticky; top:0; background:var(--surface);}
+  table.data th.broker, table.data td.broker{text-align:left; position:sticky; left:0; background:var(--surface); font-weight:600;}
+  table.data td.latest{background:var(--navy-soft); font-weight:600;}
+  table.data th.latest{background:var(--navy-soft); color:var(--navy);}
+  .table-scroll{overflow:auto; max-height:560px;}
+  td.muted-cell{color:var(--faint);}
+
+  .empty{text-align:center; padding:60px 20px; color:var(--muted);}
+  .empty h3{margin:0 0 8px; font-size:17px; color:var(--ink);}
+
+  .legend-note{font-size:12px; color:var(--muted); padding:10px 20px 0;}
+  .pill{display:inline-block; padding:1px 7px; border-radius:6px; font-weight:600; font-size:11.5px;}
+  .pill.up{background:#FBEAEA; color:var(--up);} .pill.down{background:#E7F5EE; color:var(--down);}
+
+  /* modal */
+  .overlay{position:fixed; inset:0; background:rgba(20,26,40,.45); display:none; align-items:center; justify-content:center; padding:20px; z-index:50;}
+  .overlay.show{display:flex;}
+  .modal{background:var(--surface); border-radius:14px; width:100%; max-width:620px; max-height:88vh; overflow:auto; padding:24px;}
+  .modal h2{margin:0 0 4px; font-size:19px;}
+  .modal p.hint{margin:0 0 16px; font-size:13px; color:var(--muted);}
+  .modal textarea{width:100%; min-height:200px; font-family:var(--num); font-size:12.5px; padding:12px;
+    border:1px solid var(--border-strong); border-radius:var(--radius-sm); resize:vertical;}
+  .radio-row{display:flex; gap:18px; margin:14px 0;}
+  .radio-row label{display:flex; align-items:center; gap:7px; font-size:14px; font-weight:600; cursor:pointer;}
+  .radio-row input{accent-color:var(--navy); width:16px; height:16px;}
+  .modal-actions{display:flex; justify-content:flex-end; gap:10px; margin-top:18px;}
+  .parse-msg{font-size:12.5px; margin-top:10px; min-height:18px;}
+  .parse-msg.ok{color:var(--down);} .parse-msg.err{color:var(--up);}
+  .codeblock{background:#F2F3F5; border-radius:6px; padding:8px 10px; font-family:var(--num); font-size:11.5px; color:var(--muted); margin-top:6px; white-space:pre; overflow-x:auto;}
+
+  footer{margin-top:24px; font-size:12px; color:var(--faint); text-align:center; line-height:1.7;}
+
+  @media(max-width:880px){
+    .kpis{grid-template-columns:repeat(2,1fr);}
+    .chart-box{height:360px;}
+    .brand h1{font-size:21px;}
+  }
+  *:focus-visible{outline:2px solid var(--navy); outline-offset:2px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <span class="eyebrow">券商月度資料</span>
+      <h1>券商部位看板</h1>
+      <span class="sub">ELN／PGN・庫存與交易量趨勢・排名・市佔一覽</span>
+    </div>
+    <div class="toolbar">
+      <span style="font-size:12px;font-weight:600;color:var(--navy);background:var(--navy-soft);padding:6px 12px;border-radius:999px;">單位：億元</span>
+      <div class="seg" id="productSeg"></div>
+      <div class="seg" id="datasetSeg">
+        <button data-ds="inventory" class="on">庫存</button>
+        <button data-ds="volume">交易量</button>
+      </div>
+      <button class="btn" id="exportBtn"><span>↓</span>匯出 CSV</button>
+      <button class="btn" id="exportJsonBtn"><span>⤓</span>匯出 data.json</button>
+      <button class="btn primary" id="importBtn"><span>＋</span>更新資料</button>
+    </div>
+  </header>
+
+  <section class="kpis" id="kpis"></section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <div class="tabs" id="tabs">
+        <button data-view="trend" class="on">趨勢</button>
+        <button data-view="rank">排名</button>
+        <button data-view="share">市佔率</button>
+        <button data-view="table">明細表</button>
+      </div>
+      <div class="panel-tools" id="panelTools"></div>
+    </div>
+
+    <div class="filterbar" id="filterbar"></div>
+
+    <div class="panel-body" id="panelBody"></div>
+    <div class="legend-note" id="legendNote"></div>
+  </section>
+
+  <footer>
+    紅色代表較前月<b style="color:var(--up)">增加</b>、綠色代表<b style="color:var(--down)">減少</b>（依台股慣例）。各商品依設定的來源單位（元／千元）自動換算成億元顯示。<span id="srcNote"></span>
+  </footer>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h2>更新資料</h2>
+    <p class="hint">直接從 Excel 複製整塊表格（含標題列）貼上即可。第一列是月份代碼、第一欄是券商名稱。空白或 ⚠️ 會視為無資料。</p>
+    <div class="radio-row" id="pdkindRow"></div>
+    <div class="radio-row">
+      <label><input type="radio" name="dskind" value="inventory" checked>更新「庫存」</label>
+      <label><input type="radio" name="dskind" value="volume">更新「交易量」</label>
+    </div>
+    <label class="switch" style="margin:0 0 14px;">貼上資料的單位
+      <select id="srcUnit">
+        <option value="千元">千元</option>
+        <option value="元">元</option>
+        <option value="百萬元">百萬元</option>
+        <option value="億元">億元（不換算）</option>
+      </select>
+      ，自動換算成億元
+    </label>
+    <textarea id="pasteArea" placeholder="券商	2501	2502	2503 ...&#10;凱基證	6305114	6486200	6796427 ..."></textarea>
+    <div class="codeblock">券商	2501	2502	2601
+凱基證	6305114	6486200	7375208
+元大證	5102920	5214200	7846050</div>
+    <div class="parse-msg" id="parseMsg"></div>
+    <div class="modal-actions">
+      <button class="btn" id="cancelImport">取消</button>
+      <button class="btn primary" id="applyImport">套用</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== 設定區：把你的 Google 試算表「發布到網路」連結貼到這裡 =====
+   作法：Google 試算表 → 檔案 → 共用 → 發布到網路 → 選分頁 → 發布，複製連結。
+   貼 pubhtml 或 csv 連結都可以，程式會自動處理成 CSV。沒有的那項留空字串 "" 或不填即可。
+   unit 是「試算表裡數字的單位」，畫面一律以億元顯示：元、千元、百萬元、億元。
+   試算表版面：第一列是月份代碼(2501...)、第一欄是券商名稱。要再加商品就照樣多加一組。 */
+const SHEET_CONFIG = {
+  defaultUnit: "千元",     // 沒指定 unit 的商品就用這個
+  products: {
+    ELN:    { unit: "千元", inventoryCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQnQF1Y8vIwMLbx9nrV-gi775X7sH5l9A1xGHZlx7CpEKuxY6LxisfnYz38i71XBhC3o6EPMO_PW1sx/pubhtml?gid=0&single=true", volumeCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQnQF1Y8vIwMLbx9nrV-gi775X7sH5l9A1xGHZlx7CpEKuxY6LxisfnYz38i71XBhC3o6EPMO_PW1sx/pubhtml?gid=1646967370&single=true" },
+    PGN:    { unit: "千元", inventoryCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQnQF1Y8vIwMLbx9nrV-gi775X7sH5l9A1xGHZlx7CpEKuxY6LxisfnYz38i71XBhC3o6EPMO_PW1sx/pubhtml?gid=954805594&single=true", volumeCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQnQF1Y8vIwMLbx9nrV-gi775X7sH5l9A1xGHZlx7CpEKuxY6LxisfnYz38i71XBhC3o6EPMO_PW1sx/pubhtml?gid=407124453&single=true" },
+    複委託: { unit: "元", volumeCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQnQF1Y8vIwMLbx9nrV-gi775X7sH5l9A1xGHZlx7CpEKuxY6LxisfnYz38i71XBhC3o6EPMO_PW1sx/pubhtml?gid=1404573788&single=true" },      // 複委託只有交易量
+    分戶帳: { unit: "元", inventoryCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQnQF1Y8vIwMLbx9nrV-gi775X7sH5l9A1xGHZlx7CpEKuxY6LxisfnYz38i71XBhC3o6EPMO_PW1sx/pubhtml?gid=1314821353&single=true" }    // 分戶帳只有庫存
+  }
+};
+
+const PALETTE = ['#2A6FB0','#E08A1E','#5B8C2A','#9B5DE5','#D23B3B','#1B998B','#8A6D3B','#C04CB0','#1F3A93','#7A7D85','#C8772B','#0E7C66','#A23E48'];
+
+const DEFAULT_INVENTORY = {
+  months:['2501','2502','2503','2504','2505','2506','2507','2508','2509','2510','2511','2512','2601','2602','2603','2604','2605'],
+  brokers:[
+    {name:'美好證',  values:[0,0.439,0.451,0.411,1.002,1.499,0.821,2.123,2.587,2.508,3.071,3.359,4.129,1.894,5.656,3.403,5.386]},
+    {name:'統一證',  values:[8.61,9.95,9.6,9.49,9.46,9.46046,9.74196,10.74206,10.80343,10.80599,11.17599,0.28308,11.25037,11.25031,11.251,11.18729,11.13031]},
+    {name:'兆豐證',  values:[0,0.01,0,0,0,0,0,0.02,0.01,0,0.045,0.065,0.02,0.015,0.02,0.085,0.315]},
+    {name:'台新證',  values:[0.6,0.85,0.5,0.25,0.05,0,0,0.2,0.26,0,0,0,0.15,0.05,0,0,0]},
+    {name:'國泰證',  values:[0.50446,0.81857,0.65855,0.89524,0.48772,1.25161,1.85556,2.77625,4.51367,4.42462,4.27709,6.10969,7.00883,5.83139,9.25389,7.45412,8.34848]},
+    {name:'群益證',  values:[2.52,4.7,4.82,2.25,3.88,3.4,3.12,4.99,4.94,4.7,4.3,6.45,5.12,3.81,5.32,5.34,4.81]},
+    {name:'凱基證',  values:[63.05114,64.862,67.96427,69.8201,70.07139,69.923,70.36482,71.46796,72.83622,73.70389,73.91734,3.37857,73.75208,74.20154,73.264,74.82704,76.12481]},
+    {name:'富邦證',  values:[13.78,15.30719,15.64692,13.27771,9.85476,11.31278,11.80831,11.32533,11.00556,8.84676,8.23433,5.92097,11.27139,10.79675,22.75639,23.11855,15.68593]},
+    {name:'元大證',  values:[51.0292,52.142,54.9417,52.78934,52.15045,54.34009,56.5235,56.51464,57.24019,68.35768,69.62844,37.73974,78.4605,80.76387,85.15541,85.07742,85.91861]},
+    {name:'永豐金證',values:[9.24898,9.22894,8.8008,6.89894,6.35179,5.73007,7.65927,6.57847,6.34697,5.56616,6.02367,2.54973,7.64783,10.09299,10.86575,13.9931,16.88611]},
+    {name:'群益期',  values:[null,null,null,null,null,null,null,null,null,null,null,null,0.016,0.015,0.041,0.035,0.055]}
+  ]
+};
+
+const STORE_KEY = 'brokerDash_v2';
+const K2YI = 100000;
+const UNIT_DIVISOR = { '元':1e8, '千元':1e5, '百萬元':1e2, '億元':1 };
+function unitDivisor(u){ return UNIT_DIVISOR[u]!=null ? UNIT_DIVISOR[u] : (UNIT_DIVISOR[SHEET_CONFIG.defaultUnit]||1); }
+function toCsvUrl(url){
+  let u = url.replace('/pubhtml', '/pub');
+  if(!/[?&]output=csv/.test(u)) u += (u.indexOf('?')>=0?'&':'?') + 'output=csv';
+  return u;
+}
+function emptyDs(){ return {months:[],brokers:[]}; }
+function emptyProduct(){ return {inventory:emptyDs(), volume:emptyDs()}; }
+let DATA = {};
+Object.keys(SHEET_CONFIG.products).forEach(pd=>{ DATA[pd]=emptyProduct(); });
+if(DATA.ELN) DATA.ELN.inventory = clone(DEFAULT_INVENTORY);
+let colorMap = {};
+let state = { product:'ELN', ds:'inventory', view:'trend', month:null, log:false, hidden:new Set() };
+let chart = null;
+
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+function migrate(obj){ if(obj && obj.inventory && !obj.ELN){ return {ELN:obj, PGN:emptyProduct()}; } return obj; }
+function load(){
+  try{ let s=localStorage.getItem(STORE_KEY); if(s){ DATA=JSON.parse(s); return; }
+    s=localStorage.getItem('brokerDash_v1'); if(s){ DATA=migrate(JSON.parse(s)); }
+  }catch(e){}
+}
+function save(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(DATA)); }catch(e){} }
+function normalizeAll(){ Object.keys(DATA).forEach(pd=>{ ['inventory','volume'].forEach(k=>{ if(DATA[pd]&&DATA[pd][k]&&DATA[pd][k].months) DATA[pd][k]=trimEmptyMonths(DATA[pd][k]); }); }); }
+function cur(){ return (DATA[state.product]||emptyProduct())[state.ds]; }
+function fmtMonth(c){ if(!c) return c; const s=String(c); return '20'+s.slice(0,2)+'/'+s.slice(2); }
+function fmtNum(v){ if(v==null||isNaN(v)) return '—'; const a=Math.abs(v); const dp = (a>0&&a<1)?3:2; return v.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:dp}); }
+function assignColors(){ colorMap={}; cur().brokers.forEach((b,i)=>{ colorMap[b.name]=PALETTE[i%PALETTE.length]; }); }
+function visibleBrokers(){ return cur().brokers.filter(b=>!state.hidden.has(b.name)); }
+function latestIdx(){ const m=cur().months; return m.length-1; }
+
+let SRC='內建資料';
+async function init(){
+  bindStaticUI();
+  let loaded=false;
+  try{ if(await loadFromSheet()){ loaded=true; SRC='Google 試算表'; } }catch(e){}
+  if(!loaded){
+    try{ const res=await fetch('data.json',{cache:'no-store'}); if(res.ok){ const j=migrate(await res.json()); if(j&&(j.ELN||j.PGN)){ DATA=j; loaded=true; SRC='data.json'; } } }catch(e){}
+  }
+  if(!loaded){ load(); SRC='內建／本機暫存'; }
+  normalizeAll();
+  state.ds='inventory';
+  switchProduct(Object.keys(SHEET_CONFIG.products)[0]||'ELN', true);
+  const sn=document.getElementById('srcNote'); if(sn) sn.textContent='資料來源：'+SRC+'。';
+}
+
+function metricHasData(pd,k){ const d=DATA[pd]&&DATA[pd][k]; return !!(d&&d.brokers&&d.brokers.length); }
+function buildProductSeg(){
+  const seg=document.getElementById('productSeg');
+  seg.innerHTML=Object.keys(SHEET_CONFIG.products).map((pd,i)=>`<button data-pd="${pd}" class="${i===0?'on':''}">${pd}</button>`).join('');
+  seg.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>switchProduct(btn.dataset.pd)));
+}
+function buildPdKindRadios(){
+  document.getElementById('pdkindRow').innerHTML=Object.keys(SHEET_CONFIG.products).map((pd,i)=>`<label><input type="radio" name="pdkind" value="${pd}" ${i===0?'checked':''}>${pd}</label>`).join('');
+}
+function updateMetricAvailability(){
+  const pd=state.product;
+  document.querySelectorAll('#datasetSeg button').forEach(b=>{
+    const ok=metricHasData(pd,b.dataset.ds);
+    b.disabled=!ok; b.style.opacity=ok?'':'0.3'; b.style.cursor=ok?'':'not-allowed';
+  });
+}
+
+function bindStaticUI(){
+  buildProductSeg();
+  buildPdKindRadios();
+  document.querySelectorAll('#datasetSeg button').forEach(btn=>{
+    btn.addEventListener('click',()=>switchDataset(btn.dataset.ds));
+  });
+  document.querySelectorAll('#tabs button').forEach(btn=>{
+    btn.addEventListener('click',()=>{ state.view=btn.dataset.view; renderTabs(); renderPanel(); });
+  });
+  document.getElementById('importBtn').addEventListener('click',openModal);
+  document.getElementById('exportBtn').addEventListener('click',exportCSV);
+  document.getElementById('exportJsonBtn').addEventListener('click',exportJSON);
+  document.getElementById('cancelImport').addEventListener('click',closeModal);
+  document.getElementById('applyImport').addEventListener('click',applyImport);
+  document.getElementById('overlay').addEventListener('click',e=>{ if(e.target.id==='overlay') closeModal(); });
+}
+
+function switchProduct(pd, force){
+  if(state.product===pd && !force) return;
+  state.product=pd;
+  document.querySelectorAll('#productSeg button').forEach(b=>b.classList.toggle('on', b.dataset.pd===pd));
+  refreshSelection();
+}
+function switchDataset(ds, force){
+  if(state.ds===ds && !force) return;
+  if(!metricHasData(state.product, ds)) return;
+  state.ds=ds;
+  document.querySelectorAll('#datasetSeg button').forEach(b=>b.classList.toggle('on', b.dataset.ds===ds));
+  refreshSelection();
+}
+function refreshSelection(){
+  const pd=state.product;
+  if(!metricHasData(pd,state.ds)){
+    const alt = state.ds==='inventory'?'volume':'inventory';
+    if(metricHasData(pd,alt)) state.ds=alt;
+  }
+  document.querySelectorAll('#datasetSeg button').forEach(b=>b.classList.toggle('on', b.dataset.ds===state.ds));
+  updateMetricAvailability();
+  state.hidden=new Set();
+  if(cur().brokers.length>0){ state.month=cur().months[latestIdx()]; assignColors(); }
+  renderAll();
+}
+
+function renderAll(){ renderKPIs(); renderTabs(); renderFilter(); renderPanel(); }
+
+function renderTabs(){
+  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on', b.dataset.view===state.view));
+}
+
+function renderKPIs(){
+  const box=document.getElementById('kpis');
+  const d=cur();
+  if(d.brokers.length===0){ box.innerHTML=''; return; }
+  const li=latestIdx(); const pi=li-1;
+  const latestMonth=d.months[li];
+  let total=0, top={name:'—',val:-Infinity}, mover={name:'—',diff:0};
+  d.brokers.forEach(b=>{
+    const v=b.values[li]; if(v!=null){ total+=v; if(v>top.val){top={name:b.name,val:v};} }
+    if(pi>=0){ const p=b.values[pi]; if(v!=null&&p!=null){ const diff=v-p; if(Math.abs(diff)>Math.abs(mover.diff)) mover={name:b.name,diff}; } }
+  });
+  const unit = state.ds==='inventory'?'庫存':'交易量';
+  const moverCls = mover.diff>0?'up':(mover.diff<0?'down':'flat');
+  const moverSign = mover.diff>0?'▲':(mover.diff<0?'▼':'—');
+  box.innerHTML=`
+    <div class="kpi"><div class="label">最新月份</div><div class="value num">${fmtMonth(latestMonth)}</div><div class="delta flat">目前顯示：${state.product}・${unit}</div></div>
+    <div class="kpi"><div class="label">市場總計</div><div class="value num">${fmtNum(total)}<small>億</small></div><div class="delta flat">${d.brokers.length} 家券商加總</div></div>
+    <div class="kpi"><div class="label">本月龍頭</div><div class="value">${top.name}</div><div class="delta flat num">${fmtNum(top.val)} 億</div></div>
+    <div class="kpi"><div class="label">最大月變動</div><div class="value">${mover.name}</div><div class="delta ${moverCls} num">${moverSign} ${fmtNum(Math.abs(mover.diff))} 億</div></div>`;
+}
+
+function renderFilter(){
+  const bar=document.getElementById('filterbar');
+  const d=cur();
+  if(d.brokers.length===0){ bar.style.display='none'; return; }
+  bar.style.display='flex';
+  let html='<span class="ftitle">券商</span>';
+  html+=`<span class="chip chip-all" data-all="1">全選 / 全不選</span>`;
+  d.brokers.forEach(b=>{
+    const off=state.hidden.has(b.name);
+    html+=`<span class="chip ${off?'off':''}" data-name="${b.name}"><span class="dot" style="background:${colorMap[b.name]}"></span>${b.name}</span>`;
+  });
+  bar.innerHTML=html;
+  bar.querySelectorAll('.chip[data-name]').forEach(c=>{
+    c.addEventListener('click',()=>{ const n=c.dataset.name; if(state.hidden.has(n))state.hidden.delete(n); else state.hidden.add(n); renderFilter(); renderPanel(); renderKPIs(); });
+  });
+  bar.querySelector('.chip-all').addEventListener('click',()=>{
+    if(state.hidden.size===0){ d.brokers.forEach(b=>state.hidden.add(b.name)); }
+    else { state.hidden=new Set(); }
+    renderFilter(); renderPanel(); renderKPIs();
+  });
+}
+
+function renderPanelTools(){
+  const t=document.getElementById('panelTools');
+  const d=cur();
+  if(d.brokers.length===0){ t.innerHTML=''; return; }
+  if(state.view==='trend'){
+    t.innerHTML=`<label class="switch"><input type="checkbox" id="logTog" ${state.log?'checked':''}>對數座標</label>`;
+    t.querySelector('#logTog').addEventListener('change',e=>{ state.log=e.target.checked; renderPanel(); });
+  } else if(state.view==='rank'||state.view==='share'){
+    const opts=d.months.map(m=>`<option value="${m}" ${m===state.month?'selected':''}>${fmtMonth(m)}</option>`).join('');
+    t.innerHTML=`<label>月份 <select id="monthSel">${opts}</select></label>`;
+    t.querySelector('#monthSel').addEventListener('change',e=>{ state.month=e.target.value; renderPanel(); });
+  } else { t.innerHTML=''; }
+}
+
+function destroyChart(){ if(chart){ chart.destroy(); chart=null; } }
+
+function renderPanel(){
+  renderPanelTools();
+  const body=document.getElementById('panelBody');
+  const note=document.getElementById('legendNote');
+  note.innerHTML='';
+  destroyChart();
+  const d=cur();
+  if(d.brokers.length===0){
+    body.innerHTML=`<div class="empty"><h3>尚未匯入「${state.ds==='inventory'?'庫存':'交易量'}」資料</h3><p>按右上角「更新資料」，從 Excel 複製貼上即可開始檢視。</p></div>`;
+    return;
+  }
+  if(state.view==='trend') renderTrend(body,note);
+  else if(state.view==='rank') renderRank(body);
+  else if(state.view==='share') renderShare(body,note);
+  else renderTable(body);
+}
+
+function renderTrend(body,note){
+  body.innerHTML='<div class="chart-box"><canvas id="cv" role="img" aria-label="各券商月度趨勢折線圖"></canvas></div>';
+  const d=cur();
+  const ds=visibleBrokers().map(b=>({
+    label:b.name, data:b.values.map(v=>v==null?null:v),
+    borderColor:colorMap[b.name], backgroundColor:colorMap[b.name],
+    borderWidth:2, tension:.25, pointRadius:2, pointHoverRadius:5, spanGaps:false
+  }));
+  chart=new Chart(document.getElementById('cv'),{
+    type:'line',
+    data:{labels:d.months.map(fmtMonth), datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'nearest',intersect:false},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+'：'+(c.parsed.y==null?'—':fmtNum(c.parsed.y)+' 億')}}},
+      scales:{
+        x:{ticks:{autoSkip:false,maxRotation:45,minRotation:45,font:{family:'Inter',size:11}},grid:{display:false}},
+        y:{type:state.log?'logarithmic':'linear',beginAtZero:!state.log,title:{display:true,text:'億元',font:{family:'Inter',size:11}},ticks:{font:{family:'Inter',size:11}},grid:{color:'#EEF0F3'}}
+      }
+    }
+  });
+  note.innerHTML='點上方券商標籤可單獨隱藏／顯示。'+(state.log?'（對數座標下 0 值不顯示）':'');
+}
+
+function renderRank(body){
+  const d=cur(); const idx=d.months.indexOf(state.month);
+  const rows=visibleBrokers().map(b=>({name:b.name,val:b.values[idx],prev:idx>0?b.values[idx-1]:null}))
+    .filter(r=>r.val!=null).sort((a,b)=>b.val-a.val);
+  body.innerHTML=`<div class="chart-box" style="height:${Math.max(280, rows.length*38+60)}px"><canvas id="cv" role="img" aria-label="券商排名長條圖"></canvas></div>`;
+  chart=new Chart(document.getElementById('cv'),{
+    type:'bar',
+    data:{labels:rows.map(r=>r.name),datasets:[{data:rows.map(r=>r.val),backgroundColor:rows.map(r=>colorMap[r.name]),borderRadius:5,barThickness:'flex',maxBarThickness:26}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{const r=rows[c.dataIndex]; let s=fmtNum(r.val)+' 億'; if(r.prev!=null){const dd=r.val-r.prev; s+=(dd>=0?'  ▲ ':'  ▼ ')+fmtNum(Math.abs(dd));} return s;}}}},
+      scales:{x:{beginAtZero:true,title:{display:true,text:'億元',font:{family:'Inter',size:11}},ticks:{font:{family:'Inter',size:11}},grid:{color:'#EEF0F3'}},y:{ticks:{font:{family:"Inter, 'PingFang TC', 'Microsoft JhengHei', sans-serif",size:12}},grid:{display:false}}}
+    }
+  });
+}
+
+function renderShare(body,note){
+  const d=cur(); const idx=d.months.indexOf(state.month);
+  const rows=visibleBrokers().map(b=>({name:b.name,val:b.values[idx]})).filter(r=>r.val!=null&&r.val>0).sort((a,b)=>b.val-a.val);
+  const total=rows.reduce((s,r)=>s+r.val,0);
+  body.innerHTML='<div class="chart-box" style="height:400px"><canvas id="cv" role="img" aria-label="市佔率圓餅圖"></canvas></div>';
+  chart=new Chart(document.getElementById('cv'),{
+    type:'doughnut',
+    data:{labels:rows.map(r=>r.name),datasets:[{data:rows.map(r=>r.val),backgroundColor:rows.map(r=>colorMap[r.name]),borderWidth:2,borderColor:'#fff'}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'58%',
+      plugins:{legend:{position:'right',labels:{font:{family:"Inter, 'PingFang TC', 'Microsoft JhengHei', sans-serif",size:12},boxWidth:12,padding:10,generateLabels:ch=>rows.map((r,i)=>({text:r.name+'  '+(total?Math.round(r.val/total*1000)/10:0)+'%',fillStyle:colorMap[r.name],strokeStyle:colorMap[r.name],index:i}))}},
+        tooltip:{callbacks:{label:c=>{const r=rows[c.dataIndex]; return r.name+'：'+fmtNum(r.val)+' 億（'+(total?Math.round(r.val/total*1000)/10:0)+'%）';}}}}
+    }
+  });
+  note.innerHTML=`${fmtMonth(state.month)} 市場總量 ${fmtNum(total)} 億元，已隱藏的券商與 0 值不列入。`;
+}
+
+function renderTable(body){
+  const d=cur(); const li=latestIdx();
+  const shown=visibleBrokers();
+  let h='<div class="table-scroll"><table class="data"><thead><tr><th class="broker">券商（億元）</th>';
+  d.months.forEach((m,i)=>{ h+=`<th class="${i===li?'latest':''}">${fmtMonth(m)}</th>`; });
+  h+='</tr></thead><tbody>';
+  shown.forEach(b=>{
+    h+=`<tr><td class="broker">${b.name}</td>`;
+    b.values.forEach((v,i)=>{ const cls=(i===li?'latest ':'')+(v==null?'muted-cell':''); h+=`<td class="${cls}">${fmtNum(v)}</td>`; });
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
+  body.innerHTML=h;
+}
+
+/* ---- import / export ---- */
+function openModal(){
+  document.getElementById('overlay').classList.add('show');
+  document.querySelector('input[name="pdkind"][value="'+state.product+'"]').checked=true;
+  document.querySelector('input[name="dskind"][value="'+state.ds+'"]').checked=true;
+  document.getElementById('srcUnit').value=(SHEET_CONFIG.products[state.product]||{}).unit||SHEET_CONFIG.defaultUnit||'千元';
+  document.getElementById('pasteArea').value='';
+  document.getElementById('parseMsg').textContent='';
+  document.getElementById('parseMsg').className='parse-msg';
+}
+function closeModal(){ document.getElementById('overlay').classList.remove('show'); }
+
+function parseDelimited(text, delim){
+  const rows=[]; let row=[], cell='', q=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){cell+='"';i++;} else q=false; } else cell+=c; }
+    else {
+      if(c==='"') q=true;
+      else if(c===delim){ row.push(cell); cell=''; }
+      else if(c==='\n'){ row.push(cell); rows.push(row); row=[]; cell=''; }
+      else if(c==='\r'){}
+      else cell+=c;
+    }
+  }
+  if(cell!==''||row.length){ row.push(cell); rows.push(row); }
+  return rows.filter(r=>r.some(x=>(x||'').trim()!==''));
+}
+function trimEmptyMonths(ds){
+  const n=ds.months.length;
+  const hasData=i=>ds.brokers.some(b=>b.values[i]!=null);
+  let start=0; while(start<n && !hasData(start)) start++;
+  let end=n-1; while(end>=start && !hasData(end)) end--;
+  if(start===0 && end===n-1) return ds;
+  if(start>end) return {months:[], brokers:ds.brokers.map(b=>({name:b.name,values:[]}))};
+  return { months:ds.months.slice(start,end+1), brokers:ds.brokers.map(b=>({name:b.name,values:b.values.slice(start,end+1)})) };
+}
+function rowsToDataset(rows){
+  if(rows.length<2) throw new Error('至少需要標題列加一列資料');
+  const header=rows[0].map(s=>(s||'').trim());
+  const cols=[];
+  for(let j=1;j<header.length;j++){ const code=header[j].replace(/[^0-9]/g,''); if(code) cols.push({j,code}); }
+  if(cols.length===0) throw new Error('標題列找不到月份代碼');
+  const months=cols.map(c=>c.code);
+  const brokers=[];
+  for(let i=1;i<rows.length;i++){
+    const name=(rows[i][0]||'').trim(); if(!name) continue;
+    const values=cols.map(c=>{ const raw=(rows[i][c.j]||'').trim().replace(/,/g,''); if(raw===''||/[^\d.\-]/.test(raw)) return null; const n=parseFloat(raw); return isNaN(n)?null:n; });
+    brokers.push({name,values});
+  }
+  if(brokers.length===0) throw new Error('找不到任何券商資料列');
+  return trimEmptyMonths({months,brokers});
+}
+function parseTable(text){ const delim = text.indexOf('\t')>=0?'\t':','; return rowsToDataset(parseDelimited(text, delim)); }
+
+async function fetchSheet(url, unit){
+  const base=toCsvUrl(url);
+  const u=base+(base.indexOf('?')>=0?'&':'?')+'_t='+Date.now();
+  const res=await fetch(u,{cache:'no-store'});
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  const ds=rowsToDataset(parseDelimited(await res.text(), ','));
+  const div=unitDivisor(unit);
+  if(div!==1) ds.brokers.forEach(b=>b.values=b.values.map(v=>v==null?null:v/div));
+  return ds;
+}
+async function loadFromSheet(){
+  const jobs=[];
+  const products=SHEET_CONFIG.products||{};
+  Object.keys(products).forEach(pd=>{
+    const p=products[pd]; const unit=p.unit||SHEET_CONFIG.defaultUnit;
+    if(p.inventoryCsvUrl) jobs.push(fetchSheet(p.inventoryCsvUrl, unit).then(d=>[pd,'inventory',d]));
+    if(p.volumeCsvUrl) jobs.push(fetchSheet(p.volumeCsvUrl, unit).then(d=>[pd,'volume',d]));
+  });
+  if(jobs.length===0) return false;
+  const results=await Promise.allSettled(jobs);
+  let any=false;
+  results.forEach(r=>{ if(r.status==='fulfilled'){ const [pd,k,d]=r.value; if(!DATA[pd])DATA[pd]=emptyProduct(); DATA[pd][k]=d; any=true; } });
+  return any;
+}
+
+function applyImport(){
+  const txt=document.getElementById('pasteArea').value;
+  const pd=document.querySelector('input[name="pdkind"]:checked').value;
+  const kind=document.querySelector('input[name="dskind"]:checked').value;
+  const msg=document.getElementById('parseMsg');
+  try{
+    const parsed=parseTable(txt);
+    const div=unitDivisor(document.getElementById('srcUnit').value);
+    if(div!==1) parsed.brokers.forEach(b=>{ b.values=b.values.map(v=>v==null?null:v/div); });
+    if(!DATA[pd]) DATA[pd]=emptyProduct();
+    DATA[pd][kind]=parsed; save();
+    msg.className='parse-msg ok'; msg.textContent=`已匯入 ${pd}・${kind==='inventory'?'庫存':'交易量'}：${parsed.brokers.length} 家券商、${parsed.months.length} 個月份。`;
+    setTimeout(()=>{
+      closeModal();
+      state.product=pd; state.ds=kind;
+      document.querySelectorAll('#productSeg button').forEach(b=>b.classList.toggle('on', b.dataset.pd===pd));
+      document.querySelectorAll('#datasetSeg button').forEach(b=>b.classList.toggle('on', b.dataset.ds===kind));
+      refreshSelection();
+    },650);
+  }catch(e){ msg.className='parse-msg err'; msg.textContent='解析失敗：'+e.message; }
+}
+
+function exportCSV(){
+  const d=cur(); if(d.brokers.length===0){ alert('目前沒有資料可匯出'); return; }
+  let rows=['券商,'+d.months.join(',')];
+  d.brokers.forEach(b=>{ rows.push(b.name+','+b.values.map(v=>v==null?'':v).join(',')); });
+  const blob=new Blob(['\ufeff'+rows.join('\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=state.product+'_'+(state.ds==='inventory'?'庫存':'交易量')+'_'+fmtMonth(d.months[latestIdx()]).replace('/','')+'.csv';
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+function exportJSON(){
+  const has=Object.keys(DATA).some(pd=>DATA[pd].inventory.brokers.length||DATA[pd].volume.brokers.length);
+  if(!has){ alert('目前沒有資料可匯出'); return; }
+  const blob=new Blob([JSON.stringify(DATA,null,1)],{type:'application/json;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='data.json'; a.click(); URL.revokeObjectURL(a.href);
+}
+
+init();
+</script>
+</body>
+</html>
