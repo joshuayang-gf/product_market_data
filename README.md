@@ -40,6 +40,32 @@ uvicorn app.main:app --port 8000
 
 資料庫是空的時候，第一次啟動會在背景自動回補：匯入 seed，再下載 `START_MONTH` 之後的歷史資料，大約 1 分鐘。網頁會顯示「資料更新中」，完成後自動重新整理。
 
+## 部署在內網的 Mac 上
+
+在那台 Mac 上照以下步驟做一次，之後一開機服務就會自動啟動（不需要有人登入），當掉也會自動重開。
+
+1. **安裝 Python 3.12**：到 <https://www.python.org/downloads/macos/> 下載安裝（macOS 內建的 Python 3.9 太舊）。
+2. **下載程式碼**到家目錄。不要放在「桌面／文件／下載」，macOS 會擋背景服務讀取這幾個資料夾。打開「終端機」執行：
+   ```bash
+   cd ~ && git clone -b dynamic-backend https://github.com/joshuayang-gf/product_market_data.git
+   ```
+   第一次使用 git 時，系統會跳出安裝「開發者工具」的視窗，按「安裝」，完成後再執行一次上面的指令。
+3. **執行安裝腳本**，過程中會要求輸入這台 Mac 的登入密碼：
+   ```bash
+   cd ~/product_market_data && deploy/macos/install.sh
+   ```
+   腳本會檢查 Python 和對外網路、建立 `.venv`、安裝 LaunchDaemon（`/Library/LaunchDaemons/com.goodfinance.product-market-data.plist`）、在防火牆放行 Python，並設定接電源時不睡眠。完成後會印出同事要用的網址，格式是 `http://這台的IP:8000`。
+4. **找一位同事用他的電腦開網址測試**。如果連不上，通常是公司網路擋住電腦之間的連線，需要請 IT 開通。
+
+想先看看會做哪些設定、但不實際變更，可以執行 `DRY_RUN=1 deploy/macos/install.sh`。要換 port、設定 proxy 或 `ADMIN_TOKEN`，在指令前面加上環境變數即可，例如 `PORT=8080 deploy/macos/install.sh`，可用的變數列在腳本開頭。
+
+- **更新程式**：`cd ~/product_market_data && git pull && deploy/macos/install.sh`
+- **看 log**：`tail -f ~/Library/Logs/product-market-data/server.log`
+- **移除服務**：`deploy/macos/uninstall.sh`（資料會保留）
+- **備份**：定期把 `~/product_market_data/data/` 複製出去。如果這台有開 Time Machine，也會自動包含在備份裡。
+- **IP 變動**：建議請 IT 幫這台固定內網 IP，或改用 `http://電腦名稱.local:8000`（安裝完成時會印出完整網址）。
+- **停機補跑**：服務啟動時，如果距離上次成功更新已超過 20 小時（例如關機或停電），會馬上補跑一次。
+
 ## 部署（Docker）
 
 ```bash

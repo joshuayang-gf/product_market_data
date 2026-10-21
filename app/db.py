@@ -84,6 +84,10 @@ def latest_month(conn, product: str, metric: str) -> str | None:
     return row[0]
 
 
+def last_success(conn) -> str | None:
+    return conn.execute("SELECT MAX(finished_at) FROM runs WHERE status='ok'").fetchone()[0]
+
+
 def start_run(source: str) -> int:
     with connect() as conn:
         cur = conn.execute(

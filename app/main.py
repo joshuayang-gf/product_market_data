@@ -4,6 +4,7 @@ import secrets
 import threading
 from collections import defaultdict
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -16,6 +17,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 log = logging.getLogger("app")
 
 YI = 1e8  # the page shows 億元
+CATCH_UP_AFTER = timedelta(hours=20)
+
+
+def _stale(last_ok: str | None) -> bool:
+    return last_ok is None or datetime.now(timezone.utc) - datetime.fromisoformat(last_ok) > CATCH_UP_AFTER
 
 
 @asynccontextmanager
@@ -23,9 +29,14 @@ async def lifespan(app: FastAPI):
     db.init()
     with db.connect() as conn:
         empty = not db.has_data(conn)
+        last_ok = db.last_success(conn)
     if empty and config.AUTO_BOOTSTRAP:
         log.info("empty database, bootstrapping from %s in the background", config.START_MONTH)
         threading.Thread(target=updater.bootstrap, daemon=True).start()
+    elif config.SCHEDULER_ENABLED and _stale(last_ok):
+        # The host was off or asleep at the scheduled time; don't wait for tomorrow.
+        log.info("last successful update %s, catching up now", last_ok or "never")
+        threading.Thread(target=updater.daily, daemon=True).start()
     scheduler = None
     if config.SCHEDULER_ENABLED:
         hour, minute = (int(x) for x in config.UPDATE_TIME.split(":"))
@@ -85,7 +96,7 @@ def status():
             "SELECT source, started_at, finished_at, status, detail FROM runs "
             "WHERE id IN (SELECT MAX(id) FROM runs GROUP BY source) ORDER BY source")]
         latest = {p["id"]: {m: db.latest_month(conn, p["id"], m) for m in p["metrics"]} for p in catalog.PRODUCTS}
-        last_ok = conn.execute("SELECT MAX(finished_at) FROM runs WHERE status='ok'").fetchone()[0]
+        last_ok = db.last_success(conn)
     return {"updating": updater.LOCK.locked(), "last_success": last_ok, "latest_month": latest, "runs": runs}
 
 
