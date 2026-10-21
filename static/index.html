@@ -96,21 +96,10 @@
   .pill{display:inline-block; padding:1px 7px; border-radius:6px; font-weight:600; font-size:11.5px;}
   .pill.up{background:#FBEAEA; color:var(--up);} .pill.down{background:#E7F5EE; color:var(--down);}
 
-  /* modal */
-  .overlay{position:fixed; inset:0; background:rgba(20,26,40,.45); display:none; align-items:center; justify-content:center; padding:20px; z-index:50;}
-  .overlay.show{display:flex;}
-  .modal{background:var(--surface); border-radius:14px; width:100%; max-width:620px; max-height:88vh; overflow:auto; padding:24px;}
-  .modal h2{margin:0 0 4px; font-size:19px;}
-  .modal p.hint{margin:0 0 16px; font-size:13px; color:var(--muted);}
-  .modal textarea{width:100%; min-height:200px; font-family:var(--num); font-size:12.5px; padding:12px;
-    border:1px solid var(--border-strong); border-radius:var(--radius-sm); resize:vertical;}
-  .radio-row{display:flex; gap:18px; margin:14px 0;}
-  .radio-row label{display:flex; align-items:center; gap:7px; font-size:14px; font-weight:600; cursor:pointer;}
-  .radio-row input{accent-color:var(--navy); width:16px; height:16px;}
-  .modal-actions{display:flex; justify-content:flex-end; gap:10px; margin-top:18px;}
-  .parse-msg{font-size:12.5px; margin-top:10px; min-height:18px;}
-  .parse-msg.ok{color:var(--down);} .parse-msg.err{color:var(--up);}
-  .codeblock{background:#F2F3F5; border-radius:6px; padding:8px 10px; font-family:var(--num); font-size:11.5px; color:var(--muted); margin-top:6px; white-space:pre; overflow-x:auto;}
+  .src-note{font-size:12px; color:var(--muted); padding:0 20px 16px;}
+  .src-note a{color:var(--navy); font-weight:600; text-decoration:none;}
+  .src-note a:hover{text-decoration:underline;}
+  .updated{font-size:12px; font-weight:600; color:var(--muted); padding:6px 4px;}
 
   footer{margin-top:24px; font-size:12px; color:var(--faint); text-align:center; line-height:1.7;}
 
@@ -138,8 +127,7 @@
         <button data-ds="volume">交易量</button>
       </div>
       <button class="btn" id="exportBtn"><span>↓</span>匯出 CSV</button>
-      <button class="btn" id="exportJsonBtn"><span>⤓</span>匯出 data.json</button>
-      <button class="btn primary" id="importBtn"><span>＋</span>更新資料</button>
+      <span class="updated num" id="updated"></span>
     </div>
   </header>
 
@@ -160,135 +148,70 @@
 
     <div class="panel-body" id="panelBody"></div>
     <div class="legend-note" id="legendNote"></div>
+    <div class="src-note" id="srcNote"></div>
   </section>
 
   <footer>
-    紅色代表較前月<b style="color:var(--up)">增加</b>、綠色代表<b style="color:var(--down)">減少</b>（依台股慣例）。各商品依設定的來源單位（元／千元）自動換算成億元顯示。<span id="srcNote"></span>
+    紅色代表較前月<b style="color:var(--up)">增加</b>、綠色代表<b style="color:var(--down)">減少</b>（依台股慣例）。資料每天自動從官方來源下載，金額一律換算成億元顯示。
   </footer>
 </div>
 
-<div class="overlay" id="overlay">
-  <div class="modal">
-    <h2>更新資料</h2>
-    <p class="hint">直接從 Excel 複製整塊表格（含標題列）貼上即可。第一列是月份代碼、第一欄是券商名稱。空白或 ⚠️ 會視為無資料。</p>
-    <div class="radio-row" id="pdkindRow"></div>
-    <div class="radio-row">
-      <label><input type="radio" name="dskind" value="inventory" checked>更新「庫存」</label>
-      <label><input type="radio" name="dskind" value="volume">更新「交易量」</label>
-    </div>
-    <label class="switch" style="margin:0 0 14px;">貼上資料的單位
-      <select id="srcUnit">
-        <option value="千元">千元</option>
-        <option value="元">元</option>
-        <option value="百萬元">百萬元</option>
-        <option value="億元">億元（不換算）</option>
-      </select>
-      ，自動換算成億元
-    </label>
-    <textarea id="pasteArea" placeholder="券商	2501	2502	2503 ...&#10;凱基證	6305114	6486200	6796427 ..."></textarea>
-    <div class="codeblock">券商	2501	2502	2601
-凱基證	6305114	6486200	7375208
-元大證	5102920	5214200	7846050</div>
-    <div class="parse-msg" id="parseMsg"></div>
-    <div class="modal-actions">
-      <button class="btn" id="cancelImport">取消</button>
-      <button class="btn primary" id="applyImport">套用</button>
-    </div>
-  </div>
-</div>
-
 <script>
-/* ===== 設定區：把你的 Google 試算表「發布到網路」連結貼到這裡 =====
-   作法：Google 試算表 → 檔案 → 共用 → 發布到網路 → 選分頁 → 發布，複製連結。
-   貼 pubhtml 或 csv 連結都可以，程式會自動處理成 CSV。沒有的那項留空字串 "" 或不填即可。
-   unit 是「試算表裡數字的單位」，畫面一律以億元顯示：元、千元、百萬元、億元。
-   試算表版面：第一列是月份代碼(2501...)、第一欄是券商名稱。要再加商品就照樣多加一組。 */
-const SHEET_CONFIG = {
-  defaultUnit: "千元",     // 沒指定 unit 的商品就用這個
-  products: {
-    ELN:    { unit: "千元", inventoryCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQnQF1Y8vIwMLbx9nrV-gi775X7sH5l9A1xGHZlx7CpEKuxY6LxisfnYz38i71XBhC3o6EPMO_PW1sx/pubhtml?gid=0&single=true", volumeCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQnQF1Y8vIwMLbx9nrV-gi775X7sH5l9A1xGHZlx7CpEKuxY6LxisfnYz38i71XBhC3o6EPMO_PW1sx/pubhtml?gid=1646967370&single=true" },
-    PGN:    { unit: "千元", inventoryCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQnQF1Y8vIwMLbx9nrV-gi775X7sH5l9A1xGHZlx7CpEKuxY6LxisfnYz38i71XBhC3o6EPMO_PW1sx/pubhtml?gid=954805594&single=true", volumeCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQnQF1Y8vIwMLbx9nrV-gi775X7sH5l9A1xGHZlx7CpEKuxY6LxisfnYz38i71XBhC3o6EPMO_PW1sx/pubhtml?gid=407124453&single=true" },
-    複委託: { unit: "元", volumeCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQnQF1Y8vIwMLbx9nrV-gi775X7sH5l9A1xGHZlx7CpEKuxY6LxisfnYz38i71XBhC3o6EPMO_PW1sx/pubhtml?gid=1404573788&single=true" },      // 複委託只有交易量
-    分戶帳: { unit: "元", inventoryCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQnQF1Y8vIwMLbx9nrV-gi775X7sH5l9A1xGHZlx7CpEKuxY6LxisfnYz38i71XBhC3o6EPMO_PW1sx/pubhtml?gid=1314821353&single=true" }    // 分戶帳只有庫存
-  }
-};
-
 const PALETTE = ['#2A6FB0','#E08A1E','#5B8C2A','#9B5DE5','#D23B3B','#1B998B','#8A6D3B','#C04CB0','#1F3A93','#7A7D85','#C8772B','#0E7C66','#A23E48'];
 
-const DEFAULT_INVENTORY = {
-  months:['2501','2502','2503','2504','2505','2506','2507','2508','2509','2510','2511','2512','2601','2602','2603','2604','2605'],
-  brokers:[
-    {name:'美好證',  values:[0,0.439,0.451,0.411,1.002,1.499,0.821,2.123,2.587,2.508,3.071,3.359,4.129,1.894,5.656,3.403,5.386]},
-    {name:'統一證',  values:[8.61,9.95,9.6,9.49,9.46,9.46046,9.74196,10.74206,10.80343,10.80599,11.17599,0.28308,11.25037,11.25031,11.251,11.18729,11.13031]},
-    {name:'兆豐證',  values:[0,0.01,0,0,0,0,0,0.02,0.01,0,0.045,0.065,0.02,0.015,0.02,0.085,0.315]},
-    {name:'台新證',  values:[0.6,0.85,0.5,0.25,0.05,0,0,0.2,0.26,0,0,0,0.15,0.05,0,0,0]},
-    {name:'國泰證',  values:[0.50446,0.81857,0.65855,0.89524,0.48772,1.25161,1.85556,2.77625,4.51367,4.42462,4.27709,6.10969,7.00883,5.83139,9.25389,7.45412,8.34848]},
-    {name:'群益證',  values:[2.52,4.7,4.82,2.25,3.88,3.4,3.12,4.99,4.94,4.7,4.3,6.45,5.12,3.81,5.32,5.34,4.81]},
-    {name:'凱基證',  values:[63.05114,64.862,67.96427,69.8201,70.07139,69.923,70.36482,71.46796,72.83622,73.70389,73.91734,3.37857,73.75208,74.20154,73.264,74.82704,76.12481]},
-    {name:'富邦證',  values:[13.78,15.30719,15.64692,13.27771,9.85476,11.31278,11.80831,11.32533,11.00556,8.84676,8.23433,5.92097,11.27139,10.79675,22.75639,23.11855,15.68593]},
-    {name:'元大證',  values:[51.0292,52.142,54.9417,52.78934,52.15045,54.34009,56.5235,56.51464,57.24019,68.35768,69.62844,37.73974,78.4605,80.76387,85.15541,85.07742,85.91861]},
-    {name:'永豐金證',values:[9.24898,9.22894,8.8008,6.89894,6.35179,5.73007,7.65927,6.57847,6.34697,5.56616,6.02367,2.54973,7.64783,10.09299,10.86575,13.9931,16.88611]},
-    {name:'群益期',  values:[null,null,null,null,null,null,null,null,null,null,null,null,0.016,0.015,0.041,0.035,0.055]}
-  ]
-};
-
-const STORE_KEY = 'brokerDash_v2';
-const K2YI = 100000;
-const UNIT_DIVISOR = { '元':1e8, '千元':1e5, '百萬元':1e2, '億元':1 };
-function unitDivisor(u){ return UNIT_DIVISOR[u]!=null ? UNIT_DIVISOR[u] : (UNIT_DIVISOR[SHEET_CONFIG.defaultUnit]||1); }
-function toCsvUrl(url){
-  let u = url.replace('/pubhtml', '/pub');
-  if(!/[?&]output=csv/.test(u)) u += (u.indexOf('?')>=0?'&':'?') + 'output=csv';
-  return u;
-}
 function emptyDs(){ return {months:[],brokers:[]}; }
 function emptyProduct(){ return {inventory:emptyDs(), volume:emptyDs()}; }
-let DATA = {};
-Object.keys(SHEET_CONFIG.products).forEach(pd=>{ DATA[pd]=emptyProduct(); });
-if(DATA.ELN) DATA.ELN.inventory = clone(DEFAULT_INVENTORY);
+let PRODUCTS = [];   // from /api/data, in display order
+let DATA = {};       // DATA[productId][inventory|volume] = {months, brokers:[{code,name,values}]}
+let STATUS = null;
 let colorMap = {};
-let state = { product:'ELN', ds:'inventory', view:'trend', month:null, log:false, hidden:new Set() };
+let state = { product:null, ds:'inventory', view:'trend', month:null, log:false, hidden:new Set() };
 let chart = null;
 
-function clone(o){ return JSON.parse(JSON.stringify(o)); }
-function migrate(obj){ if(obj && obj.inventory && !obj.ELN){ return {ELN:obj, PGN:emptyProduct()}; } return obj; }
-function load(){
-  try{ let s=localStorage.getItem(STORE_KEY); if(s){ DATA=JSON.parse(s); return; }
-    s=localStorage.getItem('brokerDash_v1'); if(s){ DATA=migrate(JSON.parse(s)); }
-  }catch(e){}
-}
-function save(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(DATA)); }catch(e){} }
-function normalizeAll(){ Object.keys(DATA).forEach(pd=>{ ['inventory','volume'].forEach(k=>{ if(DATA[pd]&&DATA[pd][k]&&DATA[pd][k].months) DATA[pd][k]=trimEmptyMonths(DATA[pd][k]); }); }); }
-function cur(){ return (DATA[state.product]||emptyProduct())[state.ds]; }
-function fmtMonth(c){ if(!c) return c; const s=String(c); return '20'+s.slice(0,2)+'/'+s.slice(2); }
+function cur(){ return (DATA[state.product]||emptyProduct())[state.ds]||emptyDs(); }
+function product(){ return PRODUCTS.find(p=>p.id===state.product)||{}; }
+function fmtMonth(c){ return c ? String(c).replace('-','/') : c; }
 function fmtNum(v){ if(v==null||isNaN(v)) return '—'; const a=Math.abs(v); const dp = (a>0&&a<1)?3:2; return v.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:dp}); }
+function fmtTime(iso){ if(!iso) return ''; const d=new Date(iso); return d.toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}); }
+function esc(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function assignColors(){ colorMap={}; cur().brokers.forEach((b,i)=>{ colorMap[b.name]=PALETTE[i%PALETTE.length]; }); }
 function visibleBrokers(){ return cur().brokers.filter(b=>!state.hidden.has(b.name)); }
 function latestIdx(){ const m=cur().months; return m.length-1; }
 
-let SRC='內建資料';
+async function loadData(){
+  const res=await fetch('api/data',{cache:'no-store'});
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  const j=await res.json();
+  PRODUCTS=j.products; STATUS=j.status; DATA={};
+  PRODUCTS.forEach(p=>{ DATA[p.id]=emptyProduct(); Object.entries(p.metrics).forEach(([k,d])=>{ DATA[p.id][k]={months:d.months,brokers:d.brokers}; }); });
+}
+
 async function init(){
   bindStaticUI();
-  let loaded=false;
-  try{ if(await loadFromSheet()){ loaded=true; SRC='Google 試算表'; } }catch(e){}
-  if(!loaded){
-    try{ const res=await fetch('data.json',{cache:'no-store'}); if(res.ok){ const j=migrate(await res.json()); if(j&&(j.ELN||j.PGN)){ DATA=j; loaded=true; SRC='data.json'; } } }catch(e){}
-  }
-  if(!loaded){ load(); SRC='內建／本機暫存'; }
-  normalizeAll();
-  state.ds='inventory';
-  switchProduct(Object.keys(SHEET_CONFIG.products)[0]||'ELN', true);
-  const sn=document.getElementById('srcNote'); if(sn) sn.textContent='資料來源：'+SRC+'。';
+  await refresh();
+}
+
+async function refresh(){
+  try{ await loadData(); }
+  catch(e){ document.getElementById('panelBody').innerHTML=`<div class="empty"><h3>無法載入資料</h3><p>${esc(e.message)}</p></div>`; return; }
+  buildProductSeg();
+  switchProduct(DATA[state.product] ? state.product : PRODUCTS[0].id, true);
+  renderUpdated();
+  // First start fills the database in the background; reload once it finishes.
+  if(STATUS && STATUS.updating) setTimeout(refresh, 8000);
+}
+
+function renderUpdated(){
+  const el=document.getElementById('updated');
+  if(!STATUS) return;
+  el.textContent = STATUS.updating ? '資料更新中…' : (STATUS.last_success ? '更新於 '+fmtTime(STATUS.last_success) : '');
 }
 
 function metricHasData(pd,k){ const d=DATA[pd]&&DATA[pd][k]; return !!(d&&d.brokers&&d.brokers.length); }
 function buildProductSeg(){
   const seg=document.getElementById('productSeg');
-  seg.innerHTML=Object.keys(SHEET_CONFIG.products).map((pd,i)=>`<button data-pd="${pd}" class="${i===0?'on':''}">${pd}</button>`).join('');
+  seg.innerHTML=PRODUCTS.map(p=>`<button data-pd="${p.id}" class="${p.id===state.product?'on':''}">${esc(p.label)}</button>`).join('');
   seg.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>switchProduct(btn.dataset.pd)));
-}
-function buildPdKindRadios(){
-  document.getElementById('pdkindRow').innerHTML=Object.keys(SHEET_CONFIG.products).map((pd,i)=>`<label><input type="radio" name="pdkind" value="${pd}" ${i===0?'checked':''}>${pd}</label>`).join('');
 }
 function updateMetricAvailability(){
   const pd=state.product;
@@ -299,20 +222,13 @@ function updateMetricAvailability(){
 }
 
 function bindStaticUI(){
-  buildProductSeg();
-  buildPdKindRadios();
   document.querySelectorAll('#datasetSeg button').forEach(btn=>{
     btn.addEventListener('click',()=>switchDataset(btn.dataset.ds));
   });
   document.querySelectorAll('#tabs button').forEach(btn=>{
     btn.addEventListener('click',()=>{ state.view=btn.dataset.view; renderTabs(); renderPanel(); });
   });
-  document.getElementById('importBtn').addEventListener('click',openModal);
   document.getElementById('exportBtn').addEventListener('click',exportCSV);
-  document.getElementById('exportJsonBtn').addEventListener('click',exportJSON);
-  document.getElementById('cancelImport').addEventListener('click',closeModal);
-  document.getElementById('applyImport').addEventListener('click',applyImport);
-  document.getElementById('overlay').addEventListener('click',e=>{ if(e.target.id==='overlay') closeModal(); });
 }
 
 function switchProduct(pd, force){
@@ -341,7 +257,13 @@ function refreshSelection(){
   renderAll();
 }
 
-function renderAll(){ renderKPIs(); renderTabs(); renderFilter(); renderPanel(); }
+function renderAll(){ renderKPIs(); renderTabs(); renderFilter(); renderPanel(); renderSource(); }
+
+function renderSource(){
+  const p=product(); const el=document.getElementById('srcNote');
+  if(!p.source){ el.innerHTML=''; return; }
+  el.innerHTML=`資料來源：<a href="${esc(p.source.url)}" target="_blank" rel="noopener">${esc(p.source.name)}</a>。${esc(p.note||'')}`;
+}
 
 function renderTabs(){
   document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on', b.dataset.view===state.view));
@@ -362,7 +284,7 @@ function renderKPIs(){
   const moverCls = mover.diff>0?'up':(mover.diff<0?'down':'flat');
   const moverSign = mover.diff>0?'▲':(mover.diff<0?'▼':'—');
   box.innerHTML=`
-    <div class="kpi"><div class="label">最新月份</div><div class="value num">${fmtMonth(latestMonth)}</div><div class="delta flat">目前顯示：${state.product}・${unit}</div></div>
+    <div class="kpi"><div class="label">最新月份</div><div class="value num">${fmtMonth(latestMonth)}</div><div class="delta flat">目前顯示：${esc(product().label||'')}・${unit}</div></div>
     <div class="kpi"><div class="label">市場總計</div><div class="value num">${fmtNum(total)}<small>億</small></div><div class="delta flat">${d.brokers.length} 家券商加總</div></div>
     <div class="kpi"><div class="label">本月龍頭</div><div class="value">${top.name}</div><div class="delta flat num">${fmtNum(top.val)} 億</div></div>
     <div class="kpi"><div class="label">最大月變動</div><div class="value">${mover.name}</div><div class="delta ${moverCls} num">${moverSign} ${fmtNum(Math.abs(mover.diff))} 億</div></div>`;
@@ -414,7 +336,9 @@ function renderPanel(){
   destroyChart();
   const d=cur();
   if(d.brokers.length===0){
-    body.innerHTML=`<div class="empty"><h3>尚未匯入「${state.ds==='inventory'?'庫存':'交易量'}」資料</h3><p>按右上角「更新資料」，從 Excel 複製貼上即可開始檢視。</p></div>`;
+    body.innerHTML = STATUS && STATUS.updating
+      ? `<div class="empty"><h3>正在從官方來源下載資料</h3><p>第一次啟動需要幾分鐘，完成後畫面會自動更新。</p></div>`
+      : `<div class="empty"><h3>目前沒有「${state.ds==='inventory'?'庫存':'交易量'}」資料</h3><p>請稍後再試，或查看 /api/status 的更新紀錄。</p></div>`;
     return;
   }
   if(state.view==='trend') renderTrend(body,note);
@@ -492,123 +416,16 @@ function renderTable(body){
   body.innerHTML=h;
 }
 
-/* ---- import / export ---- */
-function openModal(){
-  document.getElementById('overlay').classList.add('show');
-  document.querySelector('input[name="pdkind"][value="'+state.product+'"]').checked=true;
-  document.querySelector('input[name="dskind"][value="'+state.ds+'"]').checked=true;
-  document.getElementById('srcUnit').value=(SHEET_CONFIG.products[state.product]||{}).unit||SHEET_CONFIG.defaultUnit||'千元';
-  document.getElementById('pasteArea').value='';
-  document.getElementById('parseMsg').textContent='';
-  document.getElementById('parseMsg').className='parse-msg';
-}
-function closeModal(){ document.getElementById('overlay').classList.remove('show'); }
-
-function parseDelimited(text, delim){
-  const rows=[]; let row=[], cell='', q=false;
-  for(let i=0;i<text.length;i++){
-    const c=text[i];
-    if(q){ if(c==='"'){ if(text[i+1]==='"'){cell+='"';i++;} else q=false; } else cell+=c; }
-    else {
-      if(c==='"') q=true;
-      else if(c===delim){ row.push(cell); cell=''; }
-      else if(c==='\n'){ row.push(cell); rows.push(row); row=[]; cell=''; }
-      else if(c==='\r'){}
-      else cell+=c;
-    }
-  }
-  if(cell!==''||row.length){ row.push(cell); rows.push(row); }
-  return rows.filter(r=>r.some(x=>(x||'').trim()!==''));
-}
-function trimEmptyMonths(ds){
-  const n=ds.months.length;
-  const hasData=i=>ds.brokers.some(b=>b.values[i]!=null);
-  let start=0; while(start<n && !hasData(start)) start++;
-  let end=n-1; while(end>=start && !hasData(end)) end--;
-  if(start===0 && end===n-1) return ds;
-  if(start>end) return {months:[], brokers:ds.brokers.map(b=>({name:b.name,values:[]}))};
-  return { months:ds.months.slice(start,end+1), brokers:ds.brokers.map(b=>({name:b.name,values:b.values.slice(start,end+1)})) };
-}
-function rowsToDataset(rows){
-  if(rows.length<2) throw new Error('至少需要標題列加一列資料');
-  const header=rows[0].map(s=>(s||'').trim());
-  const cols=[];
-  for(let j=1;j<header.length;j++){ const code=header[j].replace(/[^0-9]/g,''); if(code) cols.push({j,code}); }
-  if(cols.length===0) throw new Error('標題列找不到月份代碼');
-  const months=cols.map(c=>c.code);
-  const brokers=[];
-  for(let i=1;i<rows.length;i++){
-    const name=(rows[i][0]||'').trim(); if(!name) continue;
-    const values=cols.map(c=>{ const raw=(rows[i][c.j]||'').trim().replace(/,/g,''); if(raw===''||/[^\d.\-]/.test(raw)) return null; const n=parseFloat(raw); return isNaN(n)?null:n; });
-    brokers.push({name,values});
-  }
-  if(brokers.length===0) throw new Error('找不到任何券商資料列');
-  return trimEmptyMonths({months,brokers});
-}
-function parseTable(text){ const delim = text.indexOf('\t')>=0?'\t':','; return rowsToDataset(parseDelimited(text, delim)); }
-
-async function fetchSheet(url, unit){
-  const base=toCsvUrl(url);
-  const u=base+(base.indexOf('?')>=0?'&':'?')+'_t='+Date.now();
-  const res=await fetch(u,{cache:'no-store'});
-  if(!res.ok) throw new Error('HTTP '+res.status);
-  const ds=rowsToDataset(parseDelimited(await res.text(), ','));
-  const div=unitDivisor(unit);
-  if(div!==1) ds.brokers.forEach(b=>b.values=b.values.map(v=>v==null?null:v/div));
-  return ds;
-}
-async function loadFromSheet(){
-  const jobs=[];
-  const products=SHEET_CONFIG.products||{};
-  Object.keys(products).forEach(pd=>{
-    const p=products[pd]; const unit=p.unit||SHEET_CONFIG.defaultUnit;
-    if(p.inventoryCsvUrl) jobs.push(fetchSheet(p.inventoryCsvUrl, unit).then(d=>[pd,'inventory',d]));
-    if(p.volumeCsvUrl) jobs.push(fetchSheet(p.volumeCsvUrl, unit).then(d=>[pd,'volume',d]));
-  });
-  if(jobs.length===0) return false;
-  const results=await Promise.allSettled(jobs);
-  let any=false;
-  results.forEach(r=>{ if(r.status==='fulfilled'){ const [pd,k,d]=r.value; if(!DATA[pd])DATA[pd]=emptyProduct(); DATA[pd][k]=d; any=true; } });
-  return any;
-}
-
-function applyImport(){
-  const txt=document.getElementById('pasteArea').value;
-  const pd=document.querySelector('input[name="pdkind"]:checked').value;
-  const kind=document.querySelector('input[name="dskind"]:checked').value;
-  const msg=document.getElementById('parseMsg');
-  try{
-    const parsed=parseTable(txt);
-    const div=unitDivisor(document.getElementById('srcUnit').value);
-    if(div!==1) parsed.brokers.forEach(b=>{ b.values=b.values.map(v=>v==null?null:v/div); });
-    if(!DATA[pd]) DATA[pd]=emptyProduct();
-    DATA[pd][kind]=parsed; save();
-    msg.className='parse-msg ok'; msg.textContent=`已匯入 ${pd}・${kind==='inventory'?'庫存':'交易量'}：${parsed.brokers.length} 家券商、${parsed.months.length} 個月份。`;
-    setTimeout(()=>{
-      closeModal();
-      state.product=pd; state.ds=kind;
-      document.querySelectorAll('#productSeg button').forEach(b=>b.classList.toggle('on', b.dataset.pd===pd));
-      document.querySelectorAll('#datasetSeg button').forEach(b=>b.classList.toggle('on', b.dataset.ds===kind));
-      refreshSelection();
-    },650);
-  }catch(e){ msg.className='parse-msg err'; msg.textContent='解析失敗：'+e.message; }
-}
-
+/* ---- export ---- */
 function exportCSV(){
   const d=cur(); if(d.brokers.length===0){ alert('目前沒有資料可匯出'); return; }
-  let rows=['券商,'+d.months.join(',')];
-  d.brokers.forEach(b=>{ rows.push(b.name+','+b.values.map(v=>v==null?'':v).join(',')); });
+  const q=v=>/[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;
+  let rows=['券商代號,券商（億元）,'+d.months.map(fmtMonth).join(',')];
+  d.brokers.forEach(b=>{ rows.push(b.code+','+q(b.name)+','+b.values.map(v=>v==null?'':v).join(',')); });
   const blob=new Blob(['\ufeff'+rows.join('\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-  a.download=state.product+'_'+(state.ds==='inventory'?'庫存':'交易量')+'_'+fmtMonth(d.months[latestIdx()]).replace('/','')+'.csv';
+  a.download=product().label+'_'+(state.ds==='inventory'?'庫存':'交易量')+'_'+d.months[latestIdx()].replace('-','')+'.csv';
   a.click(); URL.revokeObjectURL(a.href);
-}
-
-function exportJSON(){
-  const has=Object.keys(DATA).some(pd=>DATA[pd].inventory.brokers.length||DATA[pd].volume.brokers.length);
-  if(!has){ alert('目前沒有資料可匯出'); return; }
-  const blob=new Blob([JSON.stringify(DATA,null,1)],{type:'application/json;charset=utf-8'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='data.json'; a.click(); URL.revokeObjectURL(a.href);
 }
 
 init();

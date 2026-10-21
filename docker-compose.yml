@@ -1,0 +1,17 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      # SQLite DB + archived source files. Back this up: 分戶帳 history exists only here.
+      - market-data:/app/data
+    environment:
+      TZ: Asia/Taipei
+      UPDATE_TIME: "08:30"
+      START_MONTH: "2025-01"
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+
+volumes:
+  market-data:
