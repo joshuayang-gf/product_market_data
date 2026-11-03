@@ -30,12 +30,13 @@ async def lifespan(app: FastAPI):
     with db.connect() as conn:
         empty = not db.has_data(conn)
         last_ok = db.last_success(conn)
+        new_products = [p["id"] for p in catalog.PRODUCTS if not db.has_data(conn, p["id"])]
     if empty and config.AUTO_BOOTSTRAP:
         log.info("empty database, bootstrapping from %s in the background", config.START_MONTH)
         threading.Thread(target=updater.bootstrap, daemon=True).start()
-    elif config.SCHEDULER_ENABLED and _stale(last_ok):
-        # The host was off or asleep at the scheduled time; don't wait for tomorrow.
-        log.info("last successful update %s, catching up now", last_ok or "never")
+    elif config.SCHEDULER_ENABLED and (_stale(last_ok) or new_products):
+        # The host was off at the scheduled time, or a product was just added; don't wait for tomorrow.
+        log.info("catching up now: last success %s, products without data %s", last_ok or "never", new_products)
         threading.Thread(target=updater.daily, daemon=True).start()
     scheduler = None
     if config.SCHEDULER_ENABLED:

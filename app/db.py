@@ -73,8 +73,10 @@ def remember_names(conn, names: dict[str, str]):
     )
 
 
-def has_data(conn) -> bool:
-    return conn.execute("SELECT 1 FROM observations LIMIT 1").fetchone() is not None
+def has_data(conn, product: str | None = None) -> bool:
+    if product is None:
+        return conn.execute("SELECT 1 FROM observations LIMIT 1").fetchone() is not None
+    return conn.execute("SELECT 1 FROM observations WHERE product=? LIMIT 1", (product,)).fetchone() is not None
 
 
 def latest_month(conn, product: str, metric: str) -> str | None:

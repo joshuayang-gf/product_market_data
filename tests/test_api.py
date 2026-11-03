@@ -3,7 +3,7 @@ import threading
 import pytest
 from fastapi.testclient import TestClient
 
-from app import config, updater
+from app import catalog, config, updater
 from app.sources import Row
 
 
@@ -38,16 +38,18 @@ def test_data_endpoint(env):
     assert eln["brokers"][1]["values"] == [5.0, None, 6.0]  # 億元
 
 
-@pytest.mark.parametrize("finished_at, expect_run", [
-    ("2020-01-01T00:00:00+00:00", True),   # host was off for a long time
-    (None, False),                         # just finished (filled in below)
+@pytest.mark.parametrize("finished_at, all_products, expect_run", [
+    ("2020-01-01T00:00:00+00:00", True, True),  # host was off for a long time
+    (None, True, False),                        # just finished (filled in below)
+    (None, False, True),                        # a product was added since the last run
 ])
-def test_catch_up_on_start(env, monkeypatch, finished_at, expect_run):
+def test_catch_up_on_start(env, monkeypatch, finished_at, all_products, expect_run):
     db, main = env
     monkeypatch.setattr(config, "SCHEDULER_ENABLED", True)
     ran = threading.Event()
     monkeypatch.setattr(updater, "daily", ran.set)
-    updater.store([Row("eln", "inventory", "2026-09", "5260", "美好", 1e8)], "test")
+    products = catalog.PRODUCT_IDS if all_products else catalog.PRODUCT_IDS[:-1]
+    updater.store([Row(p, "inventory", "2026-09", "5260", "美好", 1e8) for p in products], "test")
     with db.connect() as conn:
         conn.execute("INSERT INTO runs (source, started_at, finished_at, status) VALUES ('tpex', ?, ?, 'ok')",
                      (finished_at or db.now(), finished_at or db.now()))

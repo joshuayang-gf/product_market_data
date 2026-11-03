@@ -18,10 +18,12 @@ ELN／PGN／複委託／分戶帳，各券商庫存與交易量的趨勢、排�
 | PGN | 交易量 | 櫃買中心 `CBmss102` | 保本型契約本金 | 千元 |
 | 複委託 | 交易量 | 證券商公會 `{民國年}年外國買賣彙總統計表.xlsx` | 各券商月成交金額（不含期貨商 IB、基富通） | 元 |
 | 分戶帳 | 庫存 | 證交所開放資料 `t187ap20.csv`（data.gov.tw 20764） | 科目 119095「專戶分戶帳留存客戶款項」借方餘額 | 元 |
+| RP | 庫存 | 同上 | 科目 214010「附買回債券負債」借方餘額 | 元 |
 
 - 櫃買中心：<https://www.tpex.org.tw/zh-tw/derivative/tpex-derivative/statistics/td/structure.html>，每月 1 日左右公布上月檔案，歷史月份都能下載。
 - 證券商公會：<https://www.twsa.org.tw/E01/E011.html>，一年一個檔，每月更新。
-- 證交所月計表：<https://data.gov.tw/dataset/20764>，**只有最新一個月**。每月 11 日起，系統把當天的檔案視為上月資料存檔。舊月份只存在這個系統的資料庫裡，2024/07–2026/08 的歷史則來自 `seed/split_account.csv`（由原 Google 試算表轉出）。
+- 證交所月計表：<https://data.gov.tw/dataset/20764>，**只有最新一個月**，每隔幾天重新產出一次。出表日期在每月 11 日以後的檔案，系統會把它當成上個月的資料存檔。舊月份只存在這個系統的資料庫裡：分戶帳 2024/07–2026/08 的歷史來自 `seed/split_account.csv`（由原 Google 試算表轉出），RP 則沒有歷史資料，從 2026/09 開始累積。
+- 要從同一份檔案多抓一個會計科目，在 `app/sources/mops.py` 的 `ACCOUNTS` 加一行，再到 `app/catalog.py` 的 `PRODUCTS` 加上對應的商品即可。服務重啟時，如果發現有商品還沒有任何資料，會馬上補抓一次。
 
 ### 券商代號與合併
 
@@ -59,7 +61,7 @@ uvicorn app.main:app --port 8000
 
 想先看看會做哪些設定、但不實際變更，可以執行 `DRY_RUN=1 deploy/macos/install.sh`。要換 port、設定 proxy 或 `ADMIN_TOKEN`，在指令前面加上環境變數即可，例如 `PORT=8080 deploy/macos/install.sh`，可用的變數列在腳本開頭。
 
-- **更新程式**：`cd ~/product_market_data && git pull && deploy/macos/install.sh`
+- **更新程式**：`cd ~/product_market_data && git pull && deploy/macos/install.sh`。安裝成功後設定會存在 `data/install.env`，重跑時會沿用上次的 port、proxy 等設定。
 - **看 log**：`tail -f ~/Library/Logs/product-market-data/server.log`
 - **移除服務**：`deploy/macos/uninstall.sh`（資料會保留）
 - **備份**：定期把 `~/product_market_data/data/` 複製出去。如果這台有開 Time Machine，也會自動包含在備份裡。

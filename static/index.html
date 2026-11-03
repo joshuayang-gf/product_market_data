@@ -117,7 +117,7 @@
     <div class="brand">
       <span class="eyebrow">券商月度資料</span>
       <h1>券商部位看板</h1>
-      <span class="sub">ELN／PGN／複委託／分戶帳・庫存與交易量趨勢・排名・市佔一覽</span>
+      <span class="sub">ELN／PGN／複委託／分戶帳／RP・庫存與交易量趨勢・排名・市佔一覽</span>
     </div>
     <div class="toolbar">
       <span style="font-size:12px;font-weight:600;color:var(--navy);background:var(--navy-soft);padding:6px 12px;border-radius:999px;">單位：億元</span>
@@ -287,7 +287,9 @@ function renderKPIs(){
     <div class="kpi"><div class="label">最新月份</div><div class="value num">${fmtMonth(latestMonth)}</div><div class="delta flat">目前顯示：${esc(product().label||'')}・${unit}</div></div>
     <div class="kpi"><div class="label">市場總計</div><div class="value num">${fmtNum(total)}<small>億</small></div><div class="delta flat">${d.brokers.length} 家券商加總</div></div>
     <div class="kpi"><div class="label">本月龍頭</div><div class="value">${top.name}</div><div class="delta flat num">${fmtNum(top.val)} 億</div></div>
-    <div class="kpi"><div class="label">最大月變動</div><div class="value">${mover.name}</div><div class="delta ${moverCls} num">${moverSign} ${fmtNum(Math.abs(mover.diff))} 億</div></div>`;
+    <div class="kpi"><div class="label">最大月變動</div><div class="value">${mover.name}</div>${pi<0
+      ? '<div class="delta flat">只有一個月資料，下個月起可比較</div>'
+      : `<div class="delta ${moverCls} num">${moverSign} ${fmtNum(Math.abs(mover.diff))} 億</div>`}</div>`;
 }
 
 function renderFilter(){

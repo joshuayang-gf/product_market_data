@@ -65,10 +65,20 @@ def test_twsa():
 def test_mops():
     report_date, entries = mops.parse((FIX / "t187ap20_sample.csv").read_bytes())
     assert report_date == date(2026, 10, 21)
-    vals = {c: v for c, _, v in entries}
-    assert vals["9800"] == 199_648_629_096
-    assert vals["5260"] == 3_455_508_052
-    assert len(entries) == 65
+    split = {c: v for p, c, _, v in entries if p == "split_account"}
+    rp = {c: v for p, c, _, v in entries if p == "rp"}
+    assert split["9800"] == 199_648_629_096
+    assert split["5260"] == 3_455_508_052
+    assert rp["5260"] == 5_705_174_944
+    assert rp["9200"] == 88_758_481_833
+    assert len(split) == len(rp) == 65
+
+
+def test_mops_missing_account():
+    content = (FIX / "t187ap20_sample.csv").read_bytes().decode("utf-8-sig")
+    without_rp = "\n".join(line for line in content.splitlines() if '"214010"' not in line)
+    with pytest.raises(ValueError, match="rp"):
+        mops.parse(without_rp.encode())
 
 
 def test_mops_target_month():

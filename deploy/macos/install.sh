@@ -6,16 +6,33 @@
 #         DRY_RUN=1 deploy/macos/install.sh   只檢查環境、印出設定，不做任何變更
 # 可選環境變數：PORT（預設 8000）、UPDATE_TIME（08:30）、START_MONTH（2025-01）、ADMIN_TOKEN、
 #               KEEP_AWAKE（預設 1，設 0 就不改休眠設定）、HTTPS_PROXY／HTTP_PROXY／NO_PROXY（公司若需 proxy 上網）
+# 安裝成功後設定會存在 data/install.env，下次重跑自動沿用；指令上有給的值優先。
 set -euo pipefail
 
 LABEL="com.goodfinance.product-market-data"
 APP_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 PLIST="/Library/LaunchDaemons/$LABEL.plist"
 LOG_DIR="$HOME/Library/Logs/product-market-data"
-PORT="${PORT:-8000}"
+SETTINGS="$APP_DIR/data/install.env"
+SETTING_KEYS="PORT UPDATE_TIME START_MONTH ADMIN_TOKEN KEEP_AWAKE HTTPS_PROXY HTTP_PROXY NO_PROXY"
 DRY_RUN="${DRY_RUN:-0}"
-KEEP_AWAKE="${KEEP_AWAKE:-1}"
 RUN_USER="$(id -un)"
+
+if [ -f "$SETTINGS" ]; then
+  while IFS='=' read -r key value; do
+    case " $SETTING_KEYS " in
+      *" $key "*) [ -n "${!key:-}" ] || printf -v "$key" '%s' "$value" ;;
+    esac
+  done < "$SETTINGS"
+fi
+PORT="${PORT:-8000}"
+UPDATE_TIME="${UPDATE_TIME:-08:30}"
+START_MONTH="${START_MONTH:-2025-01}"
+ADMIN_TOKEN="${ADMIN_TOKEN:-}"
+KEEP_AWAKE="${KEEP_AWAKE:-1}"
+HTTPS_PROXY="${HTTPS_PROXY:-${https_proxy:-}}"
+HTTP_PROXY="${HTTP_PROXY:-${http_proxy:-}}"
+NO_PROXY="${NO_PROXY:-${no_proxy:-}}"
 
 say() { printf '\n==> %s\n' "$*"; }
 die() { printf '\n[錯誤] %s\n' "$*" >&2; exit 1; }
@@ -49,12 +66,12 @@ done
 env_xml=""
 add_env() { [ -n "${2:-}" ] && env_xml+="        <key>$1</key><string>$(printf '%s' "$2" | xml)</string>"$'\n' || true; }
 add_env TZ "Asia/Taipei"
-add_env UPDATE_TIME "${UPDATE_TIME:-08:30}"
-add_env START_MONTH "${START_MONTH:-2025-01}"
-add_env ADMIN_TOKEN "${ADMIN_TOKEN:-}"
-add_env HTTPS_PROXY "${HTTPS_PROXY:-${https_proxy:-}}"
-add_env HTTP_PROXY "${HTTP_PROXY:-${http_proxy:-}}"
-add_env NO_PROXY "${NO_PROXY:-${no_proxy:-}}"
+add_env UPDATE_TIME "$UPDATE_TIME"
+add_env START_MONTH "$START_MONTH"
+add_env ADMIN_TOKEN "$ADMIN_TOKEN"
+add_env HTTPS_PROXY "$HTTPS_PROXY"
+add_env HTTP_PROXY "$HTTP_PROXY"
+add_env NO_PROXY "$NO_PROXY"
 APP_XML="$(printf '%s' "$APP_DIR" | xml)"
 LOG_XML="$(printf '%s' "$LOG_DIR" | xml)"
 
@@ -142,6 +159,12 @@ for _ in $(seq 1 30); do
 done
 [ "$ok" = 1 ] || die "服務沒有起來，請看 log：tail -50 \"$LOG_DIR/server.log\""
 
+mkdir -p "$APP_DIR/data"
+( umask 077
+  for key in $SETTING_KEYS; do
+    if [ -n "${!key}" ]; then printf '%s=%s\n' "$key" "${!key}"; fi
+  done > "$SETTINGS" )
+
 iface="$(route -n get default 2>/dev/null | awk '/interface:/{print $2}')"
 ip="$(ipconfig getifaddr "${iface:-en0}" 2>/dev/null || true)"
 cat <<EOF
@@ -152,6 +175,6 @@ cat <<EOF
                http://$(scutil --get LocalHostName).local:${PORT}（公司網路支援時可用，IP 變動也不受影響）
     Log：      $LOG_DIR/server.log
     第一次啟動會在背景下載歷史資料，大約 1 分鐘後畫面就會有資料。
-    更新程式：  cd "$APP_DIR" && git pull && deploy/macos/install.sh
+    更新程式：  cd "$APP_DIR" && git pull && deploy/macos/install.sh（會沿用這次的 port 等設定）
     移除服務：  deploy/macos/uninstall.sh
 EOF
